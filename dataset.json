@@ -1,0 +1,327 @@
+{
+  "_metadata": {
+    "platform": "H4i — SENAI CIMATEC",
+    "dataset_id": "PHYTOAMP-DS-001",
+    "dataset_name": "PhytoAMP: Curated Assay-Level Database of Antimicrobial Peptides Against Phytopathogens",
+    "version": "v0.1",
+    "created_at": "2025-01-01T00:00:00Z",
+    "license": "CC BY 4.0",
+    "doi_placeholder": "10.XXXXX/phytoamp.v0",
+    "language": "pt-BR / en",
+    "institution": "SENAI CIMATEC",
+    "program": "Mestrado em Modelagem Computacional e Tecnologia Industrial",
+    "contact": "phytoamp@senaicimatec.edu.br",
+    "keywords": [
+      "antimicrobial peptides", "AMPs", "phytopathogens", "agricultural biotechnology",
+      "machine learning", "curated database", "assay-level", "transfer learning",
+      "ESM-2", "benchmarking", "genomic mining", "biocontrol"
+    ],
+    "citation": "PhytoAMP Team. (2025). PhytoAMP: A curated assay-level database of antimicrobial peptides against phytopathogens. SENAI CIMATEC."
+  },
+
+  "project_description": {
+    "title": "Recurso Curado e Orientado a Contexto Agrícola para AMPs Contra Fitopatógenos",
+    "central_question": "Um recurso curado, orientado a contexto agrícola e estruturado no nível de ensaio, permite construir modelos mais úteis para priorização de AMPs contra fitopatógenos do que a simples reutilização de bases AMP genéricas?",
+    "general_objective": "Desenvolver um recurso curado e orientado a contexto agrícola, acompanhado de estratégias preditivas e de priorização, para apoiar a prospecção de peptídeos antimicrobianos com potencial de atividade contra fitopatógenos de relevância agrícola.",
+    "hypotheses": [
+      {
+        "id": "H1",
+        "label": "Valor da curadoria orientada a domínio",
+        "statement": "Modelos ajustados com conjunto curado e orientado a contexto agrícola alteram a ordenação dos candidatos e melhoram a priorização em avaliação externa-like, quando comparados a modelos treinados apenas com dados AMP genéricos."
+      },
+      {
+        "id": "H2",
+        "label": "Rigor do benchmark",
+        "statement": "A avaliação com splits homology-aware e controle por peptide_id/cluster produz não apenas métricas mais conservadoras, mas também listas de candidatos prioritários substancialmente diferentes das obtidas com splits aleatórios."
+      },
+      {
+        "id": "H3",
+        "label": "Utilidade do caso de uso genômico",
+        "statement": "A combinação entre filtros biológicos, modelos ajustados ao domínio agrícola e regras transparentes de priorização enriquece a seleção de candidatos promissores, em relação a baselines baseados apenas em homologia."
+      },
+      {
+        "id": "H4",
+        "label": "Heterogeneidade química importa",
+        "statement": "A inclusão indiscriminada de peptídeos não canônicos, NRPs e peptaibóis no mesmo espaço de modelagem de peptídeos lineares canônicos reduz a coerência representacional."
+      },
+      {
+        "id": "H5",
+        "label": "Transfer learning como estratégia de domínio",
+        "statement": "Estratégias de transfer learning partindo de representações pré-treinadas em dados proteicos ou AMP gerais tendem a superar treinamento do zero quando o conjunto agrícola curado é pequeno ou moderado."
+      }
+    ]
+  },
+
+  "schema": {
+    "entities": [
+      "peptide", "peptide_chemistry", "activity_assay", "target_pathogen",
+      "host_plant", "assay_condition", "evidence_layer", "toxicity_record",
+      "stability_record", "mechanism_annotation", "reference",
+      "curation_event", "genomic_candidate", "model_prediction",
+      "feature_set", "feature_value"
+    ],
+    "central_table": "activity_assay",
+    "organization_principle": "assay-level (not peptide-level)",
+    "evidence_model": "orthogonal_5_dimensions"
+  },
+
+  "data_schema": {
+    "fields": [
+      {"name": "peptide_id",          "type": "uuid",    "description": "Identificador único estável do peptídeo"},
+      {"name": "internal_code",       "type": "string",  "description": "Código PhytoAMP (ex: PHYTOAMP-00001)"},
+      {"name": "sequence_fasta",      "type": "string",  "description": "Sequência primária em formato FASTA"},
+      {"name": "sequence_status",     "type": "enum",    "values": ["exact", "partial", "inferred", "synthetic"]},
+      {"name": "length_aa",           "type": "integer", "description": "Comprimento em aminoácidos"},
+      {"name": "chemical_regime",     "type": "enum",    "values": ["A", "B", "C", "D"],
+       "description": "A=linear canônico, B=canônico complexo, C=não canônico/NRP/peptaibol, D=sem identidade fechada"},
+      {"name": "is_canonical",        "type": "boolean", "description": "Apenas 20 aminoácidos padrão"},
+      {"name": "is_linear",           "type": "boolean"},
+      {"name": "amp_class",           "type": "string",  "description": "Classe AMP funcional (defensin, thionin, LTP, etc.)"},
+      {"name": "chemical_class",      "type": "string",  "description": "Classe química (separada da classe AMP)"},
+      {"name": "target_tax_id",       "type": "integer", "description": "NCBI Taxonomy ID do fitopatógeno alvo"},
+      {"name": "target_species",      "type": "string",  "description": "Nome da espécie alvo"},
+      {"name": "pathogen_type",       "type": "enum",    "values": ["bacteria", "true_fungi", "oomycete", "other"]},
+      {"name": "endpoint_type",       "type": "enum",    "values": ["MIC", "MBC", "MFC", "IC50", "EC50",
+                                                                      "pct_growth_inhibition", "halo_mm", "other"]},
+      {"name": "endpoint_value_raw",  "type": "float",   "description": "Valor bruto exatamente como reportado"},
+      {"name": "endpoint_operator",   "type": "enum",    "values": ["=", ">", "<", ">=", "<="],
+       "description": "Operador de censura do MIC"},
+      {"name": "endpoint_unit",       "type": "string",  "description": "Unidade do endpoint (µM, µg/mL, etc.)"},
+      {"name": "endpoint_log2",       "type": "float",   "description": "log2(MIC) calculado quando aplicável"},
+      {"name": "is_censored",         "type": "boolean", "description": "Indica MIC censurado"},
+      {"name": "train_eligible",      "type": "boolean", "description": "Elegível para treino ML"},
+      {"name": "train_level",         "type": "integer", "description": "1=treinável, 2=contextual"},
+      {"name": "activity_zone",       "type": "enum",    "values": ["active", "grey", "inactive", "not_classified"]},
+      {"name": "experiment_type",     "type": "enum",    "values": ["in_silico", "in_vitro", "ex_vivo", "in_planta",
+                                                                      "greenhouse", "field", "product_formulation"]},
+      {"name": "evidence_type",       "type": "string",  "description": "Dimensão 1 do modelo ortogonal"},
+      {"name": "experimental_rigor",  "type": "enum",    "values": ["exploratory", "partially_standardized",
+                                                                      "standardized", "well_controlled"]},
+      {"name": "agricultural_relevance","type": "enum",  "values": ["indirect", "moderate", "direct"]},
+      {"name": "agent_identity",      "type": "enum",    "values": ["exact_sequence", "partial_sequence",
+                                                                      "mixture", "fraction", "formulation"]},
+      {"name": "host_plant",          "type": "string",  "description": "Espécie da planta hospedeira"},
+      {"name": "protocol_standard",   "type": "enum",    "values": ["CLSI_M07", "CLSI_M38", "EUCAST", "custom"]},
+      {"name": "source_doi",          "type": "string",  "description": "DOI da referência"},
+      {"name": "source_db",           "type": "string",  "description": "Base de dados de origem (DBAASP, DRAMP, etc.)"}
+    ]
+  },
+
+  "sample_records": [
+    {
+      "_comment": "Exemplo Nível 1 — Registro Treinável",
+      "peptide_id": "00000000-0001-0000-0000-000000000001",
+      "internal_code": "PHYTOAMP-00001",
+      "sequence_fasta": "KLKLLLLLKLK",
+      "sequence_status": "exact",
+      "length_aa": 11,
+      "chemical_regime": "A",
+      "is_canonical": true,
+      "is_linear": true,
+      "amp_class": "synthetic",
+      "chemical_class": "synthetic_linear",
+      "target_tax_id": 5507,
+      "target_species": "Fusarium oxysporum",
+      "pathogen_type": "true_fungi",
+      "endpoint_type": "MIC",
+      "endpoint_value_raw": 16.0,
+      "endpoint_operator": "=",
+      "endpoint_unit": "µg/mL",
+      "endpoint_log2": 4.0,
+      "is_censored": false,
+      "train_eligible": true,
+      "train_level": 1,
+      "activity_zone": "active",
+      "experiment_type": "in_vitro",
+      "experimental_rigor": "standardized",
+      "agricultural_relevance": "direct",
+      "agent_identity": "exact_sequence",
+      "protocol_standard": "CLSI_M38",
+      "source_doi": "10.XXXXX/example.2024"
+    },
+    {
+      "_comment": "Exemplo Nível 2 — Evidência Contextual",
+      "peptide_id": "00000000-0002-0000-0000-000000000002",
+      "internal_code": "PHYTOAMP-00002",
+      "sequence_fasta": "PARTIAL_SEQ",
+      "sequence_status": "partial",
+      "length_aa": 0,
+      "chemical_regime": "D",
+      "is_canonical": false,
+      "train_eligible": false,
+      "train_level": 2,
+      "activity_zone": "not_classified",
+      "experiment_type": "in_planta",
+      "experimental_rigor": "exploratory",
+      "agricultural_relevance": "direct",
+      "agent_identity": "fraction",
+      "exclusion_reason": "Sequência parcial — sem identidade exata do agente testado"
+    }
+  ],
+
+  "target_pathogens_priority": [
+    {"tax_id": 5507,   "species": "Fusarium oxysporum",      "pathogen_type": "true_fungi"},
+    {"tax_id": 34350,  "species": "Xanthomonas oryzae",      "pathogen_type": "bacteria"},
+    {"tax_id": 283,    "species": "Pseudomonas syringae",    "pathogen_type": "bacteria"},
+    {"tax_id": 551,    "species": "Erwinia amylovora",       "pathogen_type": "bacteria"},
+    {"tax_id": 33183,  "species": "Botrytis cinerea",        "pathogen_type": "true_fungi"},
+    {"tax_id": 4792,   "species": "Phytophthora infestans",  "pathogen_type": "oomycete"},
+    {"tax_id": 318829, "species": "Magnaporthe oryzae",      "pathogen_type": "true_fungi"},
+    {"tax_id": 29938,  "species": "Colletotrichum gloeosporioides", "pathogen_type": "true_fungi"},
+    {"tax_id": 48850,  "species": "Alternaria alternata",    "pathogen_type": "true_fungi"},
+    {"tax_id": 4785,   "species": "Pythium ultimum",         "pathogen_type": "oomycete"}
+  ],
+
+  "search_strategy": {
+    "databases": ["DBAASP", "DRAMP", "dbAMP", "APD6", "CAMPR4", "LAMP2"],
+    "literature_sources": ["PubMed", "Scopus", "Web of Science"],
+    "axes": {
+      "axis_1_targets": ["Fusarium", "Xanthomonas", "Pseudomonas", "Erwinia", "Pectobacterium",
+                          "Colletotrichum", "Botrytis", "Alternaria", "Magnaporthe", "Phytophthora", "Pythium"],
+      "axis_2_intervention": ["antimicrobial peptide", "defensin", "thionin", "lipid transfer protein",
+                               "hevein-like peptide", "cyclotide", "bacteriocin", "lipopeptide",
+                               "peptaibol", "synthetic peptide"],
+      "axis_3_agricultural": ["plant pathogen", "phytopathogen", "crop disease", "plant protection",
+                               "biocontrol", "disease resistance", "postharvest"],
+      "axis_4_experimental": ["MIC", "IC50", "growth inhibition", "spore germination",
+                               "lesion reduction", "greenhouse", "field", "in planta"]
+    },
+    "appendix_d_queries": [
+      "\"antimicrobial peptide\" AND Fusarium",
+      "\"antimicrobial peptide\" AND Xanthomonas",
+      "\"plant pathogen\" AND peptide AND MIC",
+      "defensin AND phytopathogen",
+      "peptaibol AND Trichoderma AND plant pathogen",
+      "Bacillus lipopeptide AND Fusarium",
+      "\"peptide conjugate\" AND Erwinia amylovora",
+      "\"in planta\" AND antimicrobial peptide AND crop disease",
+      "\"signal peptide\" AND secreted peptide AND Bacillus AND biocontrol",
+      "\"small ORF\" AND antimicrobial peptide AND genome mining"
+    ]
+  },
+
+  "benchmark_protocols": [
+    {
+      "id": "B1",
+      "name": "Random Split",
+      "usage": "Comparação metodológica apenas — nunca evidência principal",
+      "description": "Split aleatório simples (80/20)"
+    },
+    {
+      "id": "B2",
+      "name": "Peptide ID Split",
+      "usage": "Elimina repetição direta da mesma entidade",
+      "description": "Divisão por peptide_id único"
+    },
+    {
+      "id": "B3",
+      "name": "Homology-Aware Split (RESULTADO PRINCIPAL)",
+      "usage": "Resultado principal de avaliação",
+      "description": "Split por cluster de similaridade — CD-HIT com thresholds 80%, 60%, 40%",
+      "primary_threshold": 0.60,
+      "sensitivity_thresholds": [0.80, 0.60, 0.40]
+    },
+    {
+      "id": "B4",
+      "name": "Holdout por Fonte/Tempo/Patógeno",
+      "usage": "Avaliação de generalização",
+      "description": "Holdout por base de dados de origem, janela temporal ou tipo de patógeno"
+    }
+  ],
+
+  "modeling_tasks": [
+    {
+      "id": "T1",
+      "name": "Binary Classification",
+      "description": "Ativo vs Inativo com threshold explícito e análise de sensibilidade",
+      "metrics": ["AUROC", "AUPRC", "F1", "MCC", "balanced_accuracy"],
+      "priority": "primary"
+    },
+    {
+      "id": "T2",
+      "name": "Candidate Ranking",
+      "description": "Ordenar candidatos por potencial relativo",
+      "metrics": ["precision@k", "recall@k", "enrichment_factor", "NDCG"],
+      "priority": "primary"
+    },
+    {
+      "id": "T3",
+      "name": "MIC Regression",
+      "description": "Regressão quantitativa de MIC (apenas em subconjuntos homogêneos)",
+      "metrics": ["RMSE_log2MIC", "MAE_log2MIC", "pct_within_1_dilution"],
+      "priority": "conditional"
+    }
+  ],
+
+  "model_comparison_line": [
+    {"id": "M1", "name": "Classical descriptors + RF/XGBoost", "type": "baseline"},
+    {"id": "M2", "name": "Frozen ESM-2 embeddings + lightweight classifier", "type": "transfer_strategy_1"},
+    {"id": "M3", "name": "ESM-2 fine-tuning (supervised head)", "type": "transfer_strategy_2"},
+    {"id": "M4", "name": "Two-step adaptation (AMP general → agricultural)", "type": "transfer_strategy_3"}
+  ],
+
+  "chemical_regimes": {
+    "A": {
+      "label": "Peptídeos ribossomais lineares com aminoácidos canônicos",
+      "examples": ["defensinas lineares simples", "tioninas", "peptídeos sintéticos simples"],
+      "representation": "sequence + descriptors + PLM embeddings",
+      "modeling_priority": "first_cycle"
+    },
+    "B": {
+      "label": "Peptídeos canônicos estruturalmente complexos",
+      "examples": ["cíclicos", "pontes dissulfeto múltiplas", "amidados/acetilados"],
+      "representation": "sequence + structural metadata + specific descriptors",
+      "modeling_priority": "second_cycle"
+    },
+    "C": {
+      "label": "Peptídeos com aminoácidos não canônicos / NRP / peptaibóis",
+      "examples": ["peptaibóis de Trichoderma (Aib/Iva)", "surfactina", "fengicina", "iturina"],
+      "representation": "SMILES / fingerprints / chemical ontology",
+      "modeling_priority": "separate_or_contextual"
+    },
+    "D": {
+      "label": "Evidências sem identidade química fechada",
+      "examples": ["frações", "extratos", "misturas"],
+      "representation": "contextual layer only — not in main training",
+      "modeling_priority": "contextual_only"
+    }
+  },
+
+  "genomic_pipeline": {
+    "bacterial_arm": {
+      "organisms": ["Bacillus", "Streptomyces"],
+      "annotation_tools": ["Bakta>=1.9", "PGAP"],
+      "bgc_tools": ["antiSMASH 8", "GECCO"],
+      "amp_scanners": ["Macrel>=1.2", "ampir>=1.1", "AMPcombi>=0.2"],
+      "signal_peptide": ["SignalP 6.0"],
+      "clustering": "CD-HIT"
+    },
+    "fungal_arm": {
+      "organisms": ["Trichoderma (fase 2, opcional)"],
+      "annotation_tools": ["BRAKER3", "GeneMark-ETP"],
+      "secretome": ["SignalP 6.0", "TargetP 2.0", "ApoplastP"],
+      "bgc_tools": ["antiSMASH fungal modules"],
+      "status": "optional_phase2"
+    }
+  },
+
+  "translational_flags": [
+    {"flag": "flag_length_ok",       "description": "Comprimento adequado (tipicamente 5–50 aa para lineares)"},
+    {"flag": "flag_canonical",       "description": "Apenas aminoácidos canônicos (sintetizável por Fmoc/SPPS padrão)"},
+    {"flag": "flag_synthesizable",   "description": "Sintetizável — sem ciclagem complexa, lipídeos ou NRP"},
+    {"flag": "flag_low_phytotox",    "description": "Baixa fitotoxicidade reportada ou prevista"},
+    {"flag": "flag_low_hemolysis",   "description": "HC50/MIC ≥ 10 (índice de seletividade mínimo)"},
+    {"flag": "flag_stable",          "description": "Evidência de estabilidade contra proteases ou condições agrícolas"}
+  ],
+
+  "reproducibility": {
+    "version_control": "Git (GitHub)",
+    "workflow_manager": "Snakemake >= 8",
+    "containerization": ["Docker", "Apptainer/Singularity"],
+    "environment_management": "MAMBA/Conda",
+    "experiment_tracking": "MLflow",
+    "dataset_versioning": "dataset_version table (PostgreSQL)",
+    "model_cards": "docs/model_card.md",
+    "data_cards": "docs/data_card.md"
+  }
+}

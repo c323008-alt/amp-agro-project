@@ -1,0 +1,139 @@
+# ============================================================
+# PhytoAMP — Ambiente MAMBA/Conda (Braço Genômico)
+# Dissertação de Mestrado — SENAI CIMATEC
+# ============================================================
+# Instalar com:
+#   mamba env create -f environment_genomic.yml
+#   conda activate phytoamp-genomic
+#
+# Ou, para CPU-only:
+#   mamba env create -f environment_genomic.yml --name phytoamp-genomic-cpu
+# ============================================================
+
+name: phytoamp-genomic
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  # ── Python core ───────────────────────────────────────────
+  - python=3.11
+  - pip>=24.0
+  - setuptools>=68.0
+
+  # ── Bioinformatics: Anotação Procariótica ─────────────────
+  - bakta>=1.9            # Anotação rápida de genomas procariotos
+  - ncbi-amrfinderplus    # AMR (usado em conjunto com Bakta/PGAP)
+  - prodigal>=2.6.3       # Predição de genes (dependência interna)
+  - trnascan-se>=2.0      # tRNA scan
+  - aragorn               # tRNA/tmRNA
+
+  # ── BGCs — antiSMASH / GECCO ─────────────────────────────
+  - antismash>=7.0        # Clusters de metabólitos secundários
+  - gecco                 # BGC prediction (ML-based, contraste)
+  - hmmer>=3.3            # Perfis HMM
+
+  # ── Predição de AMPs ─────────────────────────────────────
+  - macrel>=1.2           # AMP prediction in genomes/metagenomes
+  - ampir>=1.1            # AMP prediction R-based (via rpy2 ou CLI)
+
+  # ── Secretoma / Topologia ────────────────────────────────
+  # SignalP 6.0 e TargetP 2.0: instalação via pip (licença acadêmica)
+  # ApoplastP: instalação via pip
+
+  # ── Alinhamento e similaridade ───────────────────────────
+  - cd-hit>=4.8           # Clustering de sequências (homology-aware split)
+  - blast>=2.14           # BLAST+
+  - diamond>=2.1          # DIAMOND alinhamento rápido
+  - mafft>=7.5            # Alinhamento múltiplo
+  - mmseqs2>=14.0         # Clustering ultrarrápido
+
+  # ── Anotação Fúngica (Braço Fúngico) ─────────────────────
+  # BRAKER3: instalado separadamente (requer GeneMark + Augustus)
+  - augustus>=3.5         # Gene prediction eukaryote
+  - miniprot              # Proteína → genoma (apoio BRAKER3)
+
+  # ── Manipulação de dados genômicos ───────────────────────
+  - biopython>=1.83
+  - pysam
+  - samtools>=1.18
+  - bedtools>=2.31
+
+  # ── Fluxo de trabalho ────────────────────────────────────
+  - snakemake>=8.0        # Workflow manager
+  - snakemake-executor-plugin-cluster-generic
+
+  # ── Python científico ─────────────────────────────────────
+  - numpy>=1.26
+  - pandas>=2.1
+  - scipy>=1.12
+  - scikit-learn>=1.4
+  - matplotlib>=3.8
+  - seaborn>=0.13
+  - plotly>=5.18
+  - tqdm>=4.66
+  - joblib>=1.3
+
+  # ── Banco de dados ────────────────────────────────────────
+  - psycopg2>=2.9
+  - sqlalchemy>=2.0
+
+  # ── Reprodutibilidade ─────────────────────────────────────
+  - mlflow>=2.11
+  - pyyaml>=6.0
+  - python-dotenv>=1.0
+  - loguru>=0.7
+
+  # ── pip extras ───────────────────────────────────────────
+  - pip:
+    # AMPcombi — parsing e filtragem de outputs de preditores AMP
+    - ampcombi>=0.2
+
+    # SignalP 6.0 — requer licença acadêmica separada
+    # Instalar após ativar o ambiente:
+    # pip install signalp6 --find-links <caminho_local>
+    # - signalp6  # comentado: requer instalação manual
+
+    # TargetP 2.0
+    # - targetp2  # comentado: requer instalação manual
+
+    # ApoplastP
+    - apoplastp>=1.0
+
+    # modlAMP — descritores físico-químicos de AMPs
+    - modlamp>=4.3
+
+    # iFeatureOmega — descritores de sequência
+    - ifeatureomegacli
+
+    # ESM-2 (Meta AI) — embeddings de linguagem proteica
+    - fair-esm>=2.0
+
+    # SHAP — eXplainable AI
+    - shap>=0.44
+
+    # XGBoost
+    - xgboost>=2.0
+
+    # LightGBM
+    - lightgbm>=4.3
+
+    # Reprodutibilidade adicional
+    - gitpython>=3.1
+    - docker>=7.0
+
+    # HTTP / APIs
+    - requests>=2.31
+    - httpx>=0.27
+    - biopython>=1.83
+
+    # Testes
+    - pytest>=8.0
+    - pytest-cov
+    - pytest-mock
+
+    # Linting
+    - ruff>=0.4
+    - black>=24.0
+    - mypy>=1.9

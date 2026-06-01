@@ -1,0 +1,391 @@
+{
+  "_metadata": {
+    "platform": "H4i — SENAI CIMATEC",
+    "format": "AI Blocks v1.0",
+    "project_id": "PHYTOAMP-001",
+    "created_at": "2025-01-01T00:00:00Z",
+    "description": "Blocos de IA para o pipeline PhytoAMP — classificação, ranking e prospecção genômica de AMPs contra fitopatógenos"
+  },
+
+  "ai_blocks": [
+
+    {
+      "block_id": "BLOCK-001",
+      "name": "PhytoAMP Curation Engine",
+      "category": "Data Processing",
+      "type": "pipeline",
+      "description": "Motor de curadoria automática que classifica registros como Nível 1 (Treinável) ou Nível 2 (Contextual) com base no schema assay-level.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "raw_records": "array of peptide-assay objects",
+          "source_database": "string (DBAASP|DRAMP|dbAMP|APD6|CAMPR4|PubMed)"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "classified_records": "array with train_eligible, train_level, exclusion_reason",
+          "stats": "dataset measurement summary"
+        }
+      },
+      "processing_steps": [
+        "Validação de sequência exata (sequence_status = exact)",
+        "Verificação de alvo fitopatogênico (tax_id NCBI presente)",
+        "Checagem de endpoint quantitativo rastreável (MIC, IC50, EC50)",
+        "Classificação de regime químico (A/B/C/D)",
+        "Atribuição de nível de evidência agrícola (modelo ortogonal 5D)",
+        "Controle de censura do endpoint (operador =, >, <)",
+        "Geração de score de completude (0–100)"
+      ],
+      "model_type": "rule_based + heuristic",
+      "language": "Python 3.11",
+      "dependencies": ["psycopg2", "sqlalchemy", "pyyaml"]
+    },
+
+    {
+      "block_id": "BLOCK-002",
+      "name": "Homology-Aware Splitter",
+      "category": "Data Preprocessing",
+      "type": "splitter",
+      "description": "Gera splits de validação com controle de homologia usando CD-HIT. Implementa os 4 benchmarks do protocolo PhytoAMP (B1–B4).",
+      "input": {
+        "type": "fasta + json",
+        "schema": {
+          "sequences": "FASTA file of all peptides",
+          "labels": "activity labels (active/inactive)",
+          "similarity_threshold": "float (0.4–0.9)"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "train_ids": "list of peptide_ids for training",
+          "test_ids":  "list of peptide_ids for testing",
+          "cluster_assignments": "peptide → cluster mapping",
+          "split_type": "random|peptide_id|homology_aware|holdout"
+        }
+      },
+      "processing_steps": [
+        "Deduplicação explícita (exact + near-duplicate detection)",
+        "Clustering com CD-HIT (thresholds 80%, 60%, 40%)",
+        "Split por cluster (não por sequência individual)",
+        "Análise de sensibilidade a múltiplos thresholds",
+        "Verificação de peptídeos muito curtos (< 8 aa)"
+      ],
+      "model_type": "algorithmic",
+      "tools": ["CD-HIT >= 4.8", "MMseqs2 >= 14"],
+      "language": "Python 3.11 + shell"
+    },
+
+    {
+      "block_id": "BLOCK-003",
+      "name": "PhysicoChem Feature Extractor",
+      "category": "Feature Engineering",
+      "type": "feature_extractor",
+      "description": "Calcula descritores físico-químicos clássicos para peptídeos (Regime A e B). Bloco 1–3 do feature engineering.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "sequences": "list of amino acid sequences",
+          "regime": "A|B"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "features": {
+            "net_charge": "float",
+            "pi": "float",
+            "hydrophobicity": "float (Kyte-Doolittle)",
+            "hydrophobic_moment": "float",
+            "aromaticity": "float",
+            "aliphaticity": "float",
+            "instability_index": "float",
+            "gravy": "float",
+            "fraction_cationic": "float",
+            "fraction_hydrophobic": "float",
+            "length_aa": "int",
+            "cys_count": "int",
+            "mw_daltons": "float",
+            "aa_composition": "dict (20 values)",
+            "dipeptide_composition": "dict (400 values)"
+          }
+        }
+      },
+      "tools": ["modlAMP >= 4.3", "iFeatureOmega >= 1.0"],
+      "model_type": "deterministic",
+      "language": "Python 3.11"
+    },
+
+    {
+      "block_id": "BLOCK-004",
+      "name": "PLM Embedding Generator",
+      "category": "Feature Engineering",
+      "type": "embedding",
+      "description": "Gera embeddings de modelos de linguagem proteica (ESM-2 e ProtT5) para estratégias de transfer learning.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "sequences": "list of amino acid sequences",
+          "model": "esm2_t6_8M_UR50D | esm2_t12_35M_UR50D | prot_t5_xl_half_uniref50-enc",
+          "pooling": "mean | cls | max"
+        }
+      },
+      "output": {
+        "type": "hdf5",
+        "schema": {
+          "embeddings": "numpy array [n_sequences × embedding_dim]",
+          "peptide_ids": "list of ids",
+          "model_info": "name, version, pooling strategy"
+        }
+      },
+      "models": {
+        "esm2_8M": {"dims": 320, "params": "8M", "gpu_required": false},
+        "esm2_35M": {"dims": 480, "params": "35M", "gpu_required": false},
+        "esm2_150M": {"dims": 640, "params": "150M", "gpu_required": true},
+        "prot_t5_xl": {"dims": 1024, "params": "3B", "gpu_required": true}
+      },
+      "tools": ["fair-esm >= 2.0", "transformers >= 4.40", "sentencepiece"],
+      "language": "Python 3.11 + PyTorch",
+      "compute": "GPU recommended for models > 35M params"
+    },
+
+    {
+      "block_id": "BLOCK-005",
+      "name": "Binary Classifier — AMP Activity",
+      "category": "Modeling",
+      "type": "classifier",
+      "description": "Classificador binário de atividade antifitopatogênica (ativo vs inativo). Implementa análise de sensibilidade a múltiplos thresholds para evitar binarização cega.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "features": "feature matrix (physicochemical or embeddings)",
+          "labels": "binary activity labels",
+          "split": "train/test split definition",
+          "thresholds": "list of MIC cutoffs for sensitivity analysis (e.g. [16, 32, 64] µg/mL)"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "metrics": {
+            "auroc": "float",
+            "auprc": "float",
+            "f1": "float",
+            "mcc": "float",
+            "balanced_accuracy": "float"
+          },
+          "predictions": "list of (peptide_id, prob_active, predicted_class)",
+          "threshold_sensitivity": "metrics at each threshold",
+          "model_path": "path to saved model"
+        }
+      },
+      "models": ["RandomForest", "XGBoost", "LogisticRegression", "ESM2_classifier"],
+      "tools": ["scikit-learn >= 1.4", "xgboost >= 2.0", "imbalanced-learn"],
+      "activity_zones": {
+        "active": "MIC <= 16 µg/mL (example)",
+        "grey": "16 < MIC <= 64 µg/mL",
+        "inactive": "MIC > 64 µg/mL",
+        "grey_zone_handling": "exclude from main training OR use sensitivity analysis"
+      },
+      "language": "Python 3.11"
+    },
+
+    {
+      "block_id": "BLOCK-006",
+      "name": "Candidate Ranker",
+      "category": "Modeling",
+      "type": "ranker",
+      "description": "Ordena candidatos AMP por potencial relativo para priorização prática. Incorpora frente de Pareto multi-objetivo.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "candidates": "list of peptide/genomic_candidate objects with features",
+          "objectives": ["model_score", "manufacturability", "stability_score", "low_toxicity_score", "novelty_score"]
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "ranked_candidates": "list sorted by pareto_rank then model_score",
+          "pareto_front": "Pareto-optimal candidates",
+          "priority_tiers": "Tier 1, 2, 3 with justification",
+          "metrics": {
+            "precision_at_10": "float",
+            "precision_at_20": "float",
+            "enrichment_factor": "float",
+            "ndcg": "float"
+          }
+        }
+      },
+      "ranking_axes": [
+        "Probabilidade/score do modelo",
+        "Novidade relativa (distância de candidatos conhecidos)",
+        "Plausibilidade secretória (SignalP score)",
+        "Ausência de múltiplas hélices transmembrana",
+        "Comprimento adequado",
+        "Classe química modelável (Regime A preferencial)",
+        "Evidência de produção plausível",
+        "Manufacturability (sintetizável por SPPS padrão)",
+        "Risco tóxico conhecido ou presumido"
+      ],
+      "language": "Python 3.11"
+    },
+
+    {
+      "block_id": "BLOCK-007",
+      "name": "XAI Auditor (SHAP)",
+      "category": "Interpretability",
+      "type": "explainer",
+      "description": "Auditoria do modelo via SHAP. Verifica se o modelo captura propriedades biológicas esperadas em vez de artefatos de protocolo experimental.",
+      "input": {
+        "type": "model + data",
+        "schema": {
+          "model_path": "path to trained sklearn/xgboost model",
+          "X_test": "feature matrix for test set",
+          "feature_names": "list of feature names"
+        }
+      },
+      "output": {
+        "type": "json + plots",
+        "schema": {
+          "shap_values": "SHAP values per sample per feature",
+          "feature_importance": "mean |SHAP| per feature",
+          "artifact_check": {
+            "length_dominance": "boolean — model over-reliant on length?",
+            "protocol_artifacts": "boolean — features correlated with protocol not biology?",
+            "expected_properties_captured": "boolean"
+          },
+          "subgroup_analysis": "SHAP by pathogen type",
+          "shap_plots": ["beeswarm", "bar", "waterfall"]
+        }
+      },
+      "warning": "XAI fornece tendências úteis, NÃO inferência mecanística definitiva nem causalidade biológica automática",
+      "tools": ["shap >= 0.44"],
+      "language": "Python 3.11"
+    },
+
+    {
+      "block_id": "BLOCK-008",
+      "name": "Bacterial Genomic Scanner",
+      "category": "Genomics",
+      "type": "genomic_pipeline",
+      "description": "Pipeline genômico para prospecção de candidatos AMP em genomas bacterianos (Bacillus, Streptomyces). Integra Bakta, antiSMASH 8, Macrel e ampir.",
+      "input": {
+        "type": "fasta",
+        "schema": {
+          "genome_fasta": "genomic FASTA file(s)",
+          "organism": "Bacillus | Streptomyces | other_bacterial"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "annotated_genes": "Bakta/PGAP annotation output",
+          "bgc_clusters": "antiSMASH 8 BGC predictions",
+          "amp_candidates": "Macrel + ampir predictions (consolidated by AMPcombi)",
+          "smorfs": "small ORF candidates",
+          "signal_peptides": "SignalP 6.0 predictions",
+          "candidates_table": "unified table with all scores and flags"
+        }
+      },
+      "tools": {
+        "annotation": "Bakta >= 1.9 | PGAP",
+        "bgc": "antiSMASH 8 + GECCO (contrast)",
+        "amp_scanners": ["Macrel >= 1.2", "ampir >= 1.1"],
+        "consolidation": "AMPcombi >= 0.2",
+        "secretome": "SignalP 6.0",
+        "clustering": "CD-HIT"
+      },
+      "language": "Python 3.11 + Snakemake + MAMBA",
+      "notes": [
+        "Bacillus: distinguir candidatos tipo AMP/smORF de lipopeptídeos NRP (universos separados)",
+        "Streptomyces: grande parte das moléculas pode cair em BGC/química complexa",
+        "Não colapsar AMP candidates e BGC products no mesmo modelo"
+      ]
+    },
+
+    {
+      "block_id": "BLOCK-009",
+      "name": "Translational Flag Annotator",
+      "category": "Postprocessing",
+      "type": "annotator",
+      "description": "Anota candidatos com flags de viabilidade translacional para aplicação agrícola prática.",
+      "input": {
+        "type": "json",
+        "schema": {
+          "candidates": "list of ranked genomic or curated candidates"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "annotated_candidates": "candidates with all flags",
+          "flags": {
+            "flag_length_ok": "boolean",
+            "flag_canonical": "boolean",
+            "flag_synthesizable": "boolean",
+            "flag_low_phytotox": "boolean",
+            "flag_low_hemolysis": "boolean (HC50/MIC >= 10)",
+            "flag_stable": "boolean",
+            "flag_no_tm_helices": "boolean"
+          },
+          "summary_table": "top candidates with all flags visible"
+        }
+      },
+      "language": "Python 3.11",
+      "agricultural_context": "Peptídeo 'ativo' não é necessariamente bom candidato aplicado — viabilidade translacional é obrigatória"
+    },
+
+    {
+      "block_id": "BLOCK-010",
+      "name": "Transfer Learning Trainer",
+      "category": "Modeling",
+      "type": "trainer",
+      "description": "Treina e compara 3 estratégias de transfer learning: embeddings congelados, fine-tuning leve e adaptação em duas etapas.",
+      "input": {
+        "type": "hdf5 + json",
+        "schema": {
+          "embeddings": "HDF5 with ESM-2 or ProtT5 embeddings",
+          "labels": "activity labels",
+          "split": "homology-aware split definition",
+          "strategy": "1 | 2 | 3"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "strategy_1_results": "frozen embeddings + lightweight classifier metrics",
+          "strategy_2_results": "fine-tuning metrics",
+          "strategy_3_results": "two-step adaptation metrics",
+          "best_strategy": "id of best performing strategy",
+          "comparison_table": "all strategies side by side"
+        }
+      },
+      "strategies": {
+        "1": "PLM pré-treinado → embeddings congelados → classificador leve (logistic/RF/XGBoost)",
+        "2": "Fine-tuning leve com ajuste supervisionado do cabeçote no domínio agrícola",
+        "3": "Treino em AMP geral → ajuste no subconjunto agrícola (idioma → dialeto)"
+      },
+      "tools": ["fair-esm >= 2.0", "transformers >= 4.40", "peft >= 0.10", "pytorch >= 2.2"],
+      "language": "Python 3.11 + PyTorch"
+    }
+  ],
+
+  "block_connections": [
+    {"from": "BLOCK-001", "to": "BLOCK-002", "description": "Classified records → split generation"},
+    {"from": "BLOCK-001", "to": "BLOCK-003", "description": "Classified records → feature extraction"},
+    {"from": "BLOCK-001", "to": "BLOCK-004", "description": "Classified records → embedding generation"},
+    {"from": "BLOCK-002", "to": "BLOCK-005", "description": "Splits → classification training"},
+    {"from": "BLOCK-002", "to": "BLOCK-010", "description": "Splits → transfer learning"},
+    {"from": "BLOCK-003", "to": "BLOCK-005", "description": "Physicochemical features → classifier"},
+    {"from": "BLOCK-004", "to": "BLOCK-010", "description": "Embeddings → transfer learning"},
+    {"from": "BLOCK-005", "to": "BLOCK-006", "description": "Classification scores → ranking"},
+    {"from": "BLOCK-005", "to": "BLOCK-007", "description": "Trained model → XAI audit"},
+    {"from": "BLOCK-008", "to": "BLOCK-005", "description": "Genomic candidates → classification"},
+    {"from": "BLOCK-008", "to": "BLOCK-006", "description": "Genomic candidates → ranking"},
+    {"from": "BLOCK-006", "to": "BLOCK-009", "description": "Ranked candidates → translational flags"},
+    {"from": "BLOCK-010", "to": "BLOCK-006", "description": "Transfer learning scores → ranking"}
+  ]
+}

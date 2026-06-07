@@ -1,0 +1,4 @@
+mic_um:
+  active_max: 16
+  inactive_min: 64
+  gray_zone: true

@@ -1,0 +1,32 @@
+
+pdblab:
+  peptide_name: []
+  sequence_raw: [sequence]
+  source_record_id: ["PepLab_id"]
+  target_name: ["Target"]
+  endpoint_value_raw: ["IC50"]
+  endpoint_unit_raw: ["activity"]
+
+plantepepdb:
+  peptide_name: ["peptide_name"]
+  sequence_raw: ["peptide_family"]
+  source_record_id: ["ppepdb-id"]
+  target_name: ["peptide_activity"]
+  endpoint_value_raw: []
+  endpoint_unit_raw: ["validation"]
+
+peplab:
+  peptide_name: [NAME]
+  sequence_raw: ["secuencia"]
+  source_record_id: ["ID"]
+  target_name: ["Cepa"]
+  endpoint_value_raw: []
+  endpoint_unit_raw: []
+  
+camp3:
+  peptide_name: ["Title"]
+  sequence_raw: ["Sequence"]
+  source_record_id: ["CAMP_ID"]
+  target_name: ["Target"]
+  endpoint_value_raw: ["Validation"]
+  endpoint_unit_raw: ["Activity"]
